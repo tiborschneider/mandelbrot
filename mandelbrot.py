@@ -7,8 +7,9 @@ minReal = -2
 maxReal = 1
 minImag = -1.5
 maxImag = 1.5
-bailout = 1500
-resolution = 1500
+bailout = 500
+resolution = 1000
+batch_size = 100
 
 def isInMandelbrot(c):
     i = 0
@@ -56,25 +57,26 @@ def fromComplexToIndex(z):
 
 
 def processBuddhaRow(args):
-    re = args[0]
+    real = args[0]
     imag = np.linspace(minImag, maxImag, resolution, endpoint = False)
-    mask = args[1]
+    masks = args[1]
     result = np.zeros((resolution, resolution), dtype=int)
-    for im in imag[np.invert(mask)]:
-        # create partial buddha
-        i = 0
-        c = re + 1j*im
-        x = c
-        while i < bailout and (np.real(x) > -2 and
-                               np.real(x) < 2 and
-                               np.imag(x) > -2 and
-                               np.imag(x) < 2):
-            #draw point
-            (ix,iy) = fromComplexToIndex(x)
-            if (0 <= ix < resolution) and (0 <= iy < resolution):
-                result[fromComplexToIndex(x)] += 1
-            x = x*x+c
-            i += 1
+    for re, mask in zip(real, mask):
+        for im in imag[np.invert(mask)]:
+            # create partial buddha
+            i = 0
+            c = re + 1j*im
+            x = c
+            while i < bailout and (np.real(x) > -2 and
+                                   np.real(x) < 2 and
+                                   np.imag(x) > -2 and
+                                   np.imag(x) < 2):
+                #draw point
+                (ix,iy) = fromComplexToIndex(x)
+                if (0 <= ix < resolution) and (0 <= iy < resolution):
+                    result[fromComplexToIndex(x)] += 1
+                x = x*x+c
+                i += 1
 
     return result
 
@@ -82,7 +84,15 @@ def processBuddhaRow(args):
 def createBuddha(mandelbrotSet):
     real = np.linspace(minImag, maxImag, resolution)
     
-    result = p_map(processBuddhaRow, list(zip(real, mandelbrotSet)))
+    batch_real = []
+    batch_mask = []
+    # create batches
+    num_batches = resolution/batch_size
+    for i in range(num_batches):
+        batch_real.append(real[i:i+batch_size])
+        batch_mask.append(mandelbrotSet[i:i+batch_size,:])
+    
+    result = p_map(processBuddhaRow, list(zip(batch_real, batch_mask)))
 
     # sum all smaller images to one large buddha
     buddha = np.zeros(result[0].shape)
